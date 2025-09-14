@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>퀴즈 MVP</title>
+  <style>
+    :root{
+      --bg:#0b1220;--card:#121a2b;--ink:#e8eefc;--muted:#9db0d7;--accent:#7aa2ff;--good:#48d597;--bad:#ff7a7a;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Apple SD Gothic Neo,Noto Sans KR,Helvetica,Arial,sans-serif;color:var(--ink);background:radial-gradient(1200px 1200px at 80% -10%,#1a2541 0%,#0b1220 55%)}
+    .container{max-width:960px;margin:0 auto;padding:24px}
+    header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    h1{font-size:24px;margin:0}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02));border:1px solid rgba(255,255,255,0.08);backdrop-filter: blur(6px);box-shadow:0 10px 40px rgba(0,0,0,.35);border-radius:16px;padding:20px}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    @media (max-width:720px){.row{grid-template-columns:1fr}}
+    label{display:block;font-size:14px;color:var(--muted);margin-bottom:8px}
+    select,input[type="number"]{width:100%;padding:12px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.12);background:#0e1627;color:var(--ink)}
+    button{appearance:none;border:none;background:var(--accent);color:#081225;padding:12px 18px;border-radius:999px;font-weight:700;cursor:pointer}
+    button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.18);color:var(--ink)}
+    .stack{display:flex;flex-direction:column;gap:12px}
+    .choices{display:grid;gap:10px}
+    .choice{padding:14px;border:1px solid rgba(255,255,255,.14);background:#0f1728;border-radius:12px;cursor:pointer;color:var(--ink);}
+    .choice *{color:inherit}
+    .choice:hover{border-color:rgba(255,255,255,.32)}
+    .choice.correct{background:rgba(72,213,151,.08);border-color:var(--good)}
+    .choice.wrong{background:rgba(255,122,122,.08);border-color:var(--bad)}
+    .choice:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+    .choice:disabled{opacity:1}
+    .muted{color:var(--muted)}
+    .progress{height:10px;background:#0e1627;border:1px solid rgba(255,255,255,0.1);border-radius:999px;overflow:hidden}
+    .bar{height:100%;background:linear-gradient(90deg,var(--accent),#a37aff);width:0%}
+    .pill{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.16);background:#0e1627;color:var(--muted);font-size:12px}
+    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    @media (max-width:720px){.grid-2{grid-template-columns:1fr}}
+    .kbd{border:1px solid rgba(255,255,255,.2);border-bottom-width:3px;padding:2px 6px;border-radius:6px;background:#0d1526;font:12px/1.4 ui-monospace,SFMono-Regular,Consolas,Monaco,Menlo}
+    .score-good{color:var(--good)}
+    .score-bad{color:var(--bad)}
+    .center{display:flex;align-items:center;justify-content:center}
+    .hidden{display:none}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>✨ 퀴즈</h1>
+      <div class="pill" id="highScorePill">최고점수: <strong id="highScore">0</strong></div>
+    </header>
+
+    <!-- Setup Screen -->
+    <section id="setup" class="card stack">
+      <div class="row">
+        <div>
+          <label>카테고리</label>
+          <select id="category">
+            <option value="all">전체</option>
+            <option value="general">상식</option>
+            <option value="science">과학</option>
+            <option value="history">역사</option>
+            <option value="tech">기술</option>
+          </select>
+        </div>
+        <div>
+          <label>문항 수</label>
+          <input id="count" type="number" min="3" max="20" value="8" />
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>타이머 (문항당 초)</label>
+          <input id="perSec" type="number" min="0" max="120" value="20" />
+          <div class="muted" style="margin-top:6px">0 입력 시 타이머 없음</div>
+        </div>
+        <div>
+          <label>문항 유형</label>
+          <select id="mode">
+            <option value="mc">객관식</option>
+            <option value="tf">O/X</option>
+            <option value="mix">혼합</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button id="startBtn">시작하기</button>
+        <button class="ghost" id="importBtn" title="JSON 가져오기">문항 가져오기</button>
+        <input id="fileInput" type="file" accept="application/json" class="hidden" />
+      </div>
+      <div class="muted">단축키: <span class="kbd">1-4</span> 보기 선택, <span class="kbd">Enter</span> 다음, <span class="kbd">R</span> 다시 시작</div>
+    </section>
+
+    <!-- Quiz Screen -->
+    <section id="quiz" class="card stack hidden" aria-live="polite">
+      <div class="grid-2">
+        <div class="pill">문항 <span id="qIndex">1</span>/<span id="qTotal">0</span></div>
+        <div class="pill" style="justify-self:end">남은 시간: <strong id="timer">-</strong>s</div>
+      </div>
+      <div class="progress"><div id="progressBar" class="bar"></div></div>
+      <h2 id="questionText" style="margin:6px 0 6px"></h2>
+      <div id="choices" class="choices"></div>
+      <div style="display:flex;gap:10px;align-items:center;justify-content:space-between">
+        <div class="muted" id="feedback"></div>
+        <div style="display:flex;gap:8px">
+          <button class="ghost" id="skipBtn">건너뛰기</button>
+          <button id="nextBtn">다음</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Result Screen -->
+    <section id="result" class="card stack hidden">
+      <h2>결과</h2>
+      <div>
+        <strong id="scoreText" class="score-good">0점</strong>
+        <span class="muted"> / <span id="scoreTotal">0</span></span>
+      </div>
+      <div class="row">
+        <div class="card" style="padding:14px">
+          <div>정답: <strong id="correctCount">0</strong></div>
+          <div>오답: <strong id="wrongCount">0</strong></div>
+          <div>무응답: <strong id="skipCount">0</strong></div>
+        </div>
+        <div class="card" style="padding:14px">
+          <div>소요 시간: <strong id="elapsed">0s</strong></div>
+          <div>정답률: <strong id="accuracy">0%</strong></div>
+          <div>최고점수 갱신: <strong id="pbBadge">-</strong></div>
+        </div>
+      </div>
+      <details>
+        <summary>문항 리뷰 열기</summary>
+        <ol id="reviewList" style="margin-top:10px"></ol>
+      </details>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button id="retryBtn">다시 풀기</button>
+        <button class="ghost" id="homeBtn">처음으로</button>
+        <button class="ghost" id="exportBtn">결과 내보내기(JSON)</button>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    // --- Sample Question Bank -------------------------------------------------
+    const BANK = [
+      { id:1, type:"mc", category:"general", q:"세계에서 가장 큰 바다는?", choices:["인도양","대서양","북극해","태평양"], answer:3, explain:"면적 기준 태평양." },
+      { id:2, type:"mc", category:"science", q:"물의 화학식은?", choices:["H2O","CO2","O2","NaCl"], answer:0, explain:"수소 2, 산소 1." },
+      { id:3, type:"tf", category:"history", q:"세종대왕은 훈민정음을 창제했다.", choices:["O","X"], answer:0, explain:"1443~1446 창제." },
+      { id:4, type:"mc", category:"tech", q:"웹 접근성 관련 표준은?", choices:["WCAG","REST","SSL","JSON"], answer:0, explain:"Web Content Accessibility Guidelines." },
+      { id:5, type:"mc", category:"general", q:"대한민국 수도는?", choices:["부산","서울","인천","대전"], answer:1, explain:"서울." },
+      { id:6, type:"tf", category:"science", q:"빛은 소리보다 빠르다.", choices:["O","X"], answer:0, explain:"광속 > 음속." },
+      { id:7, type:"mc", category:"history", q:"임진왜란 발발 연도?", choices:["1592","1492","1894","1598"], answer:0, explain:"1592년." },
+      { id:8, type:"mc", category:"tech", q:"Git에서 변경 이력을 보는 명령은?", choices:["git status","git push","git log","git init"], answer:2, explain:"git log." },
+      { id:9, type:"mc", category:"science", q:"지구 중력가속도(g) 근사값?", choices:["4.9 m/s²","9.8 m/s²","3.7 m/s²","1.6 m/s²"], answer:1, explain:"평균 9.8." },
+      { id:10,type:"tf", category:"general", q:"무지개는 8가지 색이다.", choices:["O","X"], answer:1, explain:"보통 7색." }
+    ];
+
+    // --- State ---------------------------------------------------------------
+    let state = {
+      pool: [],
+      i: 0,
+      score: 0,
+      correct: 0,
+      wrong: 0,
+      skipped: 0,
+      perSec: 0,
+      timerId: null,
+      remain: 0,
+      startedAt: 0,
+      history: [] // {id, correct, picked, time}
+    };
+
+    // --- Elements ------------------------------------------------------------
+    const $ = sel => document.querySelector(sel);
+    const setup = { el: $('#setup'), cat: $('#category'), count: $('#count'), perSec: $('#perSec'), mode: $('#mode'), startBtn: $('#startBtn'), importBtn: $('#importBtn'), file: $('#fileInput')};
+    const quiz = { el: $('#quiz'), qIndex: $('#qIndex'), qTotal: $('#qTotal'), timer: $('#timer'), progress: $('#progressBar'), text: $('#questionText'), list: $('#choices'), feedback: $('#feedback'), next: $('#nextBtn'), skip: $('#skipBtn') };
+    const result = { el: $('#result'), scoreText: $('#scoreText'), scoreTotal: $('#scoreTotal'), correct: $('#correctCount'), wrong: $('#wrongCount'), skip: $('#skipCount'), elapsed: $('#elapsed'), acc: $('#accuracy'), pb: $('#pbBadge'), list: $('#reviewList'), retry: $('#retryBtn'), home: $('#homeBtn'), exportBtn: $('#exportBtn') };
+    const highScoreEl = $('#highScore');
+
+    // --- Utils ---------------------------------------------------------------
+    const shuffle = arr => arr.map(v=>[Math.random(),v]).sort((a,b)=>a[0]-b[0]).map(v=>v[1]);
+    const fmtSec = s => s<60? `${s}s` : `${Math.floor(s/60)}m ${s%60}s`;
+    const clamp = (n,min,max)=>Math.max(min,Math.min(max,n));
+    const getHigh = () => Number(localStorage.getItem('quiz_high')||0);
+    const setHigh = (v) => localStorage.setItem('quiz_high', String(v));
+
+    function selectPool(){
+      const cat = setup.cat.value;
+      const mode = setup.mode.value;
+      const cnt = clamp(Number(setup.count.value||8),3,20);
+      let pool = BANK.filter(q => cat==='all' ? true : q.category===cat);
+      if(mode!=="mix") pool = pool.filter(q=>q.type===mode);
+      if(pool.length<cnt){
+        const extra = BANK.filter(q=>!pool.includes(q) && (mode==="mix" || q.type===mode));
+        pool = pool.concat(extra);
+      }
+      pool = shuffle(pool).slice(0,cnt).map(q=>({...q}));
+      // 객관식 보기 섞기
+      pool.forEach(q=>{
+        if(q.type==="mc"){
+          const pairs = q.choices.map((c,i)=>({c,i}));
+          const sh = shuffle(pairs);
+          q.choices = sh.map(p=>p.c);
+          q.answer = sh.findIndex(p=>p.i===q.answer);
+        }
+      });
+      return pool;
+    }
+
+    function show(el){ [setup.el, quiz.el, result.el].forEach(s=>s.classList.add('hidden')); el.classList.remove('hidden'); }
+
+    function start(){
+      state.pool = selectPool();
+      state.i = 0; state.score = 0; state.correct=0; state.wrong=0; state.skipped=0; state.history=[];
+      state.perSec = clamp(Number(setup.perSec.value||0),0,120);
+      state.startedAt = Date.now();
+      quiz.qTotal.textContent = state.pool.length;
+      highScoreEl.textContent = getHigh();
+      show(quiz.el);
+      renderQuestion();
+    }
+
+    function renderQuestion(){
+      const q = state.pool[state.i];
+      quiz.qIndex.textContent = state.i+1;
+      quiz.text.textContent = q.q;
+      quiz.list.innerHTML = '';
+      quiz.feedback.textContent = '';
+      quiz.progress.style.width = `${(state.i/state.pool.length)*100}%`;
+      const makeBtn = (label, idx) => {
+        const btn = document.createElement('button');
+        btn.className = 'choice';
+        btn.innerHTML = `<span style="opacity:.7;margin-right:8px">${idx+1}.</span> ${label}`;
+        btn.onclick = ()=> choose(idx);
+        return btn;
+      }
+      q.choices.forEach((c,i)=> quiz.list.appendChild(makeBtn(c,i)));
+      quiz.next.disabled=true;
+      if(state.perSec>0){
+        state.remain = state.perSec;
+        quiz.timer.textContent = state.remain;
+        clearInterval(state.timerId);
+        state.timerId = setInterval(()=>{
+          state.remain--; quiz.timer.textContent = state.remain;
+          if(state.remain<=0){ clearInterval(state.timerId); skip(); }
+        },1000);
+      } else { quiz.timer.textContent = '-'; }
+    }
+
+    function choose(idx){
+      clearInterval(state.timerId);
+      const q = state.pool[state.i];
+      const nodes = [...quiz.list.children];
+      nodes.forEach(n=>n.disabled=true);
+      const correct = idx===q.answer;
+      nodes[q.answer].classList.add('correct');
+      if(idx!==q.answer && idx!=null) nodes[idx].classList.add('wrong');
+      quiz.feedback.textContent = (correct? '정답! ': '오답. ') + (q.explain? `힌트: ${q.explain}`:'');
+      if(correct){ state.score += 10; state.correct++; } else { state.wrong++; }
+      state.history.push({id:q.id, correct, picked:idx, time: state.perSec? (state.perSec - state.remain) : null});
+      quiz.next.disabled=false;
+    }
+
+    function skip(){
+      clearInterval(state.timerId);
+      state.skipped++;
+      state.history.push({id:state.pool[state.i].id, correct:false, picked:null, time: state.perSec? (state.perSec - Math.max(0,state.remain)) : null});
+      next();
+    }
+
+    function next(){
+      if(state.i < state.pool.length-1){
+        state.i++; renderQuestion();
+      } else { finish(); }
+    }
+
+    function finish(){
+      show(result.el);
+      const total = state.pool.length*10;
+      result.scoreText.textContent = `${state.score}점`;
+      result.scoreText.className = state.score/total >= 0.6 ? 'score-good' : 'score-bad';
+      result.scoreTotal.textContent = total;
+      result.correct.textContent = state.correct;
+      result.wrong.textContent = state.wrong;
+      result.skip.textContent = state.skipped;
+      const elapsed = Math.round((Date.now()-state.startedAt)/1000);
+      result.elapsed.textContent = fmtSec(elapsed);
+      const acc = Math.round((state.correct/state.pool.length)*100);
+      result.acc.textContent = acc + '%';
+      // Personal Best
+      const prev = getHigh();
+      if(state.score>prev){ setHigh(state.score); result.pb.textContent = '신기록!'; highScoreEl.textContent = state.score; }
+      else { result.pb.textContent = '유지'; }
+      // Review
+      result.list.innerHTML = '';
+      state.pool.forEach((q,idx)=>{
+        const li = document.createElement('li');
+        const picked = state.history[idx].picked;
+        const isCorrect = state.history[idx].correct;
+        li.innerHTML = `<div style="margin-bottom:6px"><strong>Q${idx+1}.</strong> ${q.q}</div>`+
+          `<div class="muted">정답: <strong>${q.choices[q.answer]}</strong>`+
+          ` | 내 선택: <strong>${picked==null? '—': q.choices[picked]}</strong>`+
+          ` | ${isCorrect? '<span class="score-good">정답</span>':'<span class="score-bad">오답</span>'}`+
+          `${q.explain? ` | 해설: ${q.explain}`:''}</div>`;
+        result.list.appendChild(li);
+      });
+    }
+
+    function exportResult(){
+      const data = {
+        finishedAt: new Date().toISOString(),
+        score: state.score,
+        total: state.pool.length*10,
+        stats: {correct: state.correct, wrong: state.wrong, skipped: state.skipped},
+        history: state.history,
+      };
+      const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `quiz_result_${Date.now()}.json`; a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function importQuestions(file){
+      const reader = new FileReader();
+      reader.onload = e => {
+        try{
+          const json = JSON.parse(e.target.result);
+          if(!Array.isArray(json)) throw new Error('배열 형태의 JSON 필요');
+          // 간단 검증
+          json.forEach((q,i)=>{
+            if(!q.q || !Array.isArray(q.choices) || typeof q.answer!=='number') throw new Error(`문항 ${i+1} 형식 오류`);
+            q.id = q.id ?? Date.now()+i;
+            q.type = q.type ?? (q.choices.length===2? 'tf':'mc');
+            q.category = q.category ?? 'custom';
+          });
+          // 기존 BANK 보존하면서 추가
+          BANK.push(...json);
+          alert(`문항 ${json.length}개를 가져왔습니다.`);
+        }catch(err){
+          alert('가져오기 실패: '+ err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // --- Events --------------------------------------------------------------
+    setup.startBtn.addEventListener('click', start);
+    setup.importBtn.addEventListener('click', ()=> setup.file.click());
+    setup.file.addEventListener('change', (e)=>{ if(e.target.files[0]) importQuestions(e.target.files[0]); });
+
+    quiz.next.addEventListener('click', next);
+    quiz.skip.addEventListener('click', skip);
+
+    result.retry.addEventListener('click', ()=>{ show(quiz.el); state.i=0; state.score=0; state.correct=0; state.wrong=0; state.skipped=0; state.history=[]; state.startedAt=Date.now(); renderQuestion(); });
+    result.home.addEventListener('click', ()=>{ show(setup.el); });
+    result.exportBtn.addEventListener('click', exportResult);
+
+    // Keyboard shortcuts
+    window.addEventListener('keydown', (e)=>{
+      if(quiz.el.classList.contains('hidden')) return;
+      if(e.key>='1' && e.key<='4'){
+        const idx = Number(e.key)-1;
+        if(quiz.list.children[idx] && !quiz.list.children[idx].disabled) choose(idx);
+      } else if(e.key==='Enter'){
+        if(!quiz.next.disabled) next();
+      } else if(e.key.toLowerCase()==='r'){
+        show(setup.el);
+      }
+    });
+
+    // Init
+    highScoreEl.textContent = getHigh();
+  </script>
+</body>
+</html>
